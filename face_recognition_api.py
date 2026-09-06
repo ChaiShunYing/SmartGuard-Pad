@@ -35,7 +35,7 @@ from google.oauth2 import service_account
 from google.cloud import firestore as gcf
 
 google_creds = service_account.Credentials.from_service_account_info(firebase_creds)
-db = gcf.Client(project=firebase_creds["project_id"], credentials=google_creds, database="(default)")
+db = gcf.Client(project=firebase_creds["project_id"], credentials=google_creds, database="smartguard-db")
 bucket = storage.bucket()
 print(f"[DEBUG] Firestore client initialized for project: {firebase_creds['project_id']}")
 
