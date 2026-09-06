@@ -5,9 +5,8 @@ which runs InsightFace comparison, returns the result immediately, and logs
 the event to Firestore + Storage in the background (so ESP32 doesn't wait
 for the Firebase round trip).
 
-This version also has full debug logging for the Firestore write, so if it
-fails again we can see the FULL error (not just the short message) in the
-Render logs.
+This version adds per-stage timing logs so we can see exactly where the
+~7 seconds is being spent (network read, decode, face detection, etc).
 """
 import os
 import json
@@ -15,12 +14,15 @@ import uuid
 import datetime
 import pickle
 import traceback
+import time
 import numpy as np
 import cv2
 from fastapi import FastAPI, Request, BackgroundTasks
 from insightface.app import FaceAnalysis
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
+from google.oauth2 import service_account
+from google.cloud import firestore as gcf
 
 # ============ Config ============
 THRESHOLD = 0.5
@@ -31,8 +33,6 @@ cred = credentials.Certificate(firebase_creds)
 firebase_admin.initialize_app(cred, {
     "storageBucket": "smartguard-pad-system.firebasestorage.app"
 })
-from google.oauth2 import service_account
-from google.cloud import firestore as gcf
 
 google_creds = service_account.Credentials.from_service_account_info(firebase_creds)
 db = gcf.Client(project=firebase_creds["project_id"], credentials=google_creds, database="smartguard-db")
@@ -99,29 +99,44 @@ def log_event(device_id: str, image_bytes: bytes, result: str, similarity: float
 
 @app.post("/recognize")
 async def recognize(request: Request, background_tasks: BackgroundTasks):
+    t0 = time.time()
     device_id = request.query_params.get("device_id", "unknown-device")
     event_id = str(uuid.uuid4())  # generate up front so we can return it immediately
 
     # ESP32 sends raw JPEG bytes directly (not multipart/form-data),
     # so read the raw request body instead of using UploadFile
     contents = await request.body()
+    t1 = time.time()
+    print(f"[TIMING] Read body: {t1 - t0:.2f}s, size: {len(contents)} bytes")
+
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    t2 = time.time()
+    print(f"[TIMING] Decode image: {t2 - t1:.2f}s")
 
     if frame is None:
         print("Recognition result: not_owner, reason: invalid_image")
+        print(f"[TIMING] TOTAL server-side time: {t2 - t0:.2f}s")
         background_tasks.add_task(log_event, device_id, contents, "not_owner", 0.0, "invalid_image", event_id)
         return {"result": "not_owner", "similarity": 0.0, "reason": "invalid_image", "event_id": event_id}
 
     faces = face_app.get(frame)
+    t3 = time.time()
+    print(f"[TIMING] Face detection + embedding: {t3 - t2:.2f}s")
+
     if len(faces) == 0:
         print("Recognition result: not_owner, reason: no_face_detected")
+        print(f"[TIMING] TOTAL server-side time: {t3 - t0:.2f}s")
         background_tasks.add_task(log_event, device_id, contents, "not_owner", 0.0, "no_face_detected", event_id)
         return {"result": "not_owner", "similarity": 0.0, "reason": "no_face_detected", "event_id": event_id}
 
     is_owner, score = check_is_owner(faces[0].embedding)
+    t4 = time.time()
+    print(f"[TIMING] Compare with owner embeddings: {t4 - t3:.2f}s")
+
     result = "owner" if is_owner else "not_owner"
     print(f"Recognition result: {result}, similarity: {score:.4f}")
+    print(f"[TIMING] TOTAL server-side time: {t4 - t0:.2f}s")
 
     background_tasks.add_task(log_event, device_id, contents, result, round(float(score), 4), "ok", event_id)
     return {"result": result, "similarity": round(float(score), 4), "reason": "ok", "event_id": event_id}
