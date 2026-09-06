@@ -7,7 +7,7 @@ which runs InsightFace comparison and returns the result directly in the respons
 import pickle
 import numpy as np
 import cv2
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, Request
 from insightface.app import FaceAnalysis
 
 # ============ Config ============
@@ -34,8 +34,10 @@ def check_is_owner(face_embedding):
 
 
 @app.post("/recognize")
-async def recognize(file: UploadFile = File(...)):
-    contents = await file.read()
+async def recognize(request: Request):
+    # ESP32 sends raw JPEG bytes directly (not multipart/form-data),
+    # so read the raw request body instead of using UploadFile
+    contents = await request.body()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -49,6 +51,7 @@ async def recognize(file: UploadFile = File(...)):
 
     is_owner, score = check_is_owner(faces[0].embedding)
     result = "owner" if is_owner else "not_owner"
+    print(f"Recognition result: {result}, similarity: {score:.4f}")
 
     return {"result": result, "similarity": round(float(score), 4), "reason": "ok"}
 
