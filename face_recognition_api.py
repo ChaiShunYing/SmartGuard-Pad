@@ -31,9 +31,13 @@ cred = credentials.Certificate(firebase_creds)
 firebase_admin.initialize_app(cred, {
     "storageBucket": "smartguard-pad-system.firebasestorage.app"
 })
-db = firestore.client()
+from google.oauth2 import service_account
+from google.cloud import firestore as gcf
+
+google_creds = service_account.Credentials.from_service_account_info(firebase_creds)
+db = gcf.Client(project=firebase_creds["project_id"], credentials=google_creds, database="(default)")
 bucket = storage.bucket()
-print(f"[DEBUG] Firestore client initialized for project: {cred.project_id}")
+print(f"[DEBUG] Firestore client initialized for project: {firebase_creds['project_id']}")
 
 # ============ Initialize insightface (loaded once at startup) ============
 app = FastAPI()
