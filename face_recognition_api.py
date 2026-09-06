@@ -42,11 +42,13 @@ async def recognize(request: Request):
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if frame is None:
+        print("Recognition result: not_owner, reason: invalid_image")
         return {"result": "not_owner", "similarity": 0.0, "reason": "invalid_image"}
 
     faces = face_app.get(frame)
 
     if len(faces) == 0:
+        print("Recognition result: not_owner, reason: no_face_detected")
         return {"result": "not_owner", "similarity": 0.0, "reason": "no_face_detected"}
 
     is_owner, score = check_is_owner(faces[0].embedding)
