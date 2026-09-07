@@ -101,7 +101,8 @@ def log_event(device_id: str, image_bytes: bytes, result: str, similarity: float
 async def recognize(request: Request, background_tasks: BackgroundTasks):
     t0 = time.time()
     device_id = request.query_params.get("device_id", "unknown-device")
-    event_id = str(uuid.uuid4())  # generate up front so we can return it immediately
+    timestamp_str = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+    event_id = f"{timestamp_str}_{uuid.uuid4().hex[:6]}"
 
     # ESP32 sends raw JPEG bytes directly (not multipart/form-data),
     # so read the raw request body instead of using UploadFile
