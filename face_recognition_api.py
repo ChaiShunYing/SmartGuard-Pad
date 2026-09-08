@@ -41,10 +41,10 @@ print(f"[DEBUG] Firestore client initialized for project: {firebase_creds['proje
 
 # ============ Initialize insightface (loaded once at startup) ============
 app = FastAPI()
-face_app = FaceAnalysis(name='buffalo_m', providers=['CPUExecutionProvider'])
+face_app = FaceAnalysis(name='buffalo_sc', providers=['CPUExecutionProvider'])
 face_app.prepare(ctx_id=0, det_size=(320, 320))
 
-with open("owner_profile_m.pkl", "rb") as f:
+with open("owner_profile_sc.pkl", "rb") as f:
     owner_embeddings = pickle.load(f)
 print(f"Loaded {len(owner_embeddings)} owner embeddings")
 
